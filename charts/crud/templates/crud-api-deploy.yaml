@@ -1,0 +1,170 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "threadfix.crud.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  {{- with .Values.annotations }}
+  annotations:
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- include "threadfix.self.progressDeadlineSeconds" . | nindent 2 }}
+  selector:
+    matchLabels:
+      {{- include "threadfix.crud.selectorLabels" . | nindent 6 }}
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ .Values.global.threadfix.featureToggles | toString | sha256sum }}
+      creationTimestamp: null
+      labels:
+        {{- include "threadfix.crud.selectorLabels" . | nindent 8 }}
+    spec:
+      {{ include "threadfix.imagePullSecrets" . | indent 6 }}
+      serviceAccountName: {{ include "threadfix.self.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        {{- if eq "true" ( include "threadfix.wait.enabled" . ) -}}
+        {{- include "threadfix.waitForDB" . | nindent 8 }}
+        {{- include "threadfix.waitForKafka" . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.migration.enabled }}
+        - name: {{ template "threadfix.crud.fullname" . }}-migration
+          securityContext:
+            {{- toYaml .Values.migration.securityContext | nindent 12 }}
+          image: {{ template "threadfix.migration.image" . }}
+          imagePullPolicy: {{ template "threadfix.migration.image.pullPolicy" .  }}
+          env:
+            - name: SPRING_DATASOURCE_DRIVERCLASSNAME
+              value: {{ template "threadfix.db.driver" . }}
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: password
+            - name: SPRING_DATASOURCE_URL
+              value: {{ include "threadfix.crud.db.url" . | quote }}
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: username
+            - name: SPRING_DATASOURCE_HIKARI_MINIMUM-IDLE
+              value: "{{ template "threadfix.db.pool.minPool" . }}"
+            - name: SPRING_DATASOURCE_HIKARI_MAXIMUM-POOL-SIZE
+              value: "{{ template "threadfix.db.pool.maxPool" . }}"
+            - name: SPRING_FLYWAY_CLEANDISABLED
+              value: "true"
+            - name: SPRING_FLYWAY_CONNECT-RETRIES
+              value: "300"
+            - name: SPRING_FLYWAY_LOCATIONS
+              value: "classpath:/db/migration/{vendor}"
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ include "threadfix.springProfilesActive" . | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config-flags
+          volumeMounts:
+            - name: tf-config
+              mountPath: /opt
+            {{- if .Values.migration.extraVolumeMounts }}
+            {{- toYaml .Values.migration.extraVolumeMounts | nindent 12 }}
+            {{- end }}
+        {{- end }}
+      containers:
+        - name: {{ template "threadfix.crud.fullname" . }}
+          {{- $probeValues := dict }}
+          {{- $_ := set $probeValues "livenessPath" "/actuator/health/liveness" }}
+          {{- $_ := set $probeValues "readinessPath" "/actuator/health/readiness" }}
+          {{- $_ := set $probeValues "port" "http" -}}
+          {{- include "threadfix.probes" (dict "args" $probeValues "context" . ) | indent 10 }}
+          securityContext:
+            {{- toYaml .Values.image.securityContext | nindent 12 }}
+          image: {{ template "threadfix.image" . }}
+          imagePullPolicy: {{ template "threadfix.image.pullPolicy" . }}
+          env:
+            - name: API_AUTH_HOSTNAME
+              value: {{ include "threadfix.auth.fullname" . | quote }}
+            - name: API_GATEWAY_PREFIX
+              value: /api
+            - name: SPRING_DATASOURCE_URL
+              value: {{ include "threadfix.crud.db.url" . | quote }}
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: password
+            - name: SPRING_DATASOURCE_DRIVERCLASSNAME
+              value: {{ template "threadfix.db.driver" . }}
+            - name: SPRING_CLOUD_STREAM_KAFKA_STREAMS_BINDER_BROKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "threadfix.kafka.cm" . }}
+                  key: advertised-listeners
+            - name: SPRING_KAFKA_BOOTSTRAPSERVERS
+              value: "{{ template "threadfix.kafka.fullname" . }}:{{ include "threadfix.kafka.externalPort" . }}"
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ include "threadfix.springProfilesActive" . | quote }}
+            - name: LOGGING_CONFIG
+              value: /opt/logs/logback-all.xml
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ .Values.javaOpts | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config-flags
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8070
+              protocol: TCP
+          command:
+            - /bin/bash
+            - -c
+            - |
+              java -Djava.security.egd=file:/dev/./urandom -jar /tn-network-web.jar
+          volumeMounts:
+            - name: tf-log-persistent-storage
+              mountPath: /opt/logs
+            - name: tf-config
+              mountPath: /opt/logs/logback-all.xml
+              subPath: logback-all.xml
+            - name: working-dir
+              mountPath: /app
+            {{- if .Values.extraVolumeMounts }}
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+            {{- end }}
+          workingDir: /app
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      volumes:
+        - name: tf-log-persistent-storage
+          persistentVolumeClaim:
+            claimName: crud-log-claim
+        - name: tf-config
+          configMap:
+            name: {{ .Release.Name }}-config
+        - name: working-dir
+          emptyDir: {}
+        {{- if .Values.extraVolumes }}
+        {{- toYaml .Values.extraVolumes | nindent 8 }}
+        {{- end }}

@@ -1,0 +1,30 @@
+{{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1/Ingress" -}}
+apiVersion: networking.k8s.io/v1
+{{- else if .Capabilities.APIVersions.Has "networking.k8s.io/v1beta1/Ingress" -}}
+apiVersion: networking.k8s.io/v1beta1
+{{- else -}}
+apiVersion: extensions/v1beta1
+{{- end }}
+kind: Ingress
+metadata:
+  annotations:
+    konghq.com/override: actuator-defect-api
+    kubernetes.io/ingress.class: {{ include "threadfix.ingress.class" . }}
+  name: actuator-defect-api
+  namespace: {{ .Release.Namespace }}
+spec:
+  rules:
+  - http:
+      paths:
+      - backend:
+          {{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1/Ingress" }}
+          service:
+            name: {{ include "threadfix.defect.fullname" . }}-actuator-service
+            port:
+              number: {{ template "threadfix.defect.servicePort" . }}
+        pathType: Prefix
+          {{- else }}
+          serviceName: {{ include "threadfix.defect.fullname" . }}-actuator-service
+          servicePort: {{ template "threadfix.defect.servicePort" . }}
+          {{- end }}
+        path: /actuator/defect-api

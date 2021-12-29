@@ -1,0 +1,9 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: {{ .Release.Name }}-forwarded-port
+  namespace: {{ .Release.Namespace }}
+config:
+  functions:
+    - ngx.var.upstream_x_forwarded_port={{ .Values.kong.proxy.tls.servicePort }}
+plugin: post-function

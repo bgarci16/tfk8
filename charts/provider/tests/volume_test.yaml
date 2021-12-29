@@ -1,0 +1,32 @@
+suite: provider volumes
+templates:
+  - provider-deploy.yaml
+tests:
+  - it: provider extra volume
+    set:
+      migration:
+        extraVolumeMounts:
+        - name: extra-volume
+          mountPath: /tmp/migration-data
+      extraVolumes:
+      - name: extra-volume
+        emptyDir: {}
+      extraVolumeMounts:
+      - name: extra-volume
+        mountPath: /tmp/new-data
+    asserts:
+      - contains:
+          path: spec.template.spec.initContainers[2].volumeMounts
+          content:
+            name: extra-volume
+            mountPath: /tmp/migration-data
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: extra-volume
+            mountPath: /tmp/new-data
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: extra-volume
+            emptyDir: {}

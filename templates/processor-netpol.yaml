@@ -1,0 +1,22 @@
+{{- if and .Values.networkPolicy.enabled .Values.processor.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-allow-processor
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+   matchLabels:
+    {{ include "threadfix.processor.selectorLabels" . | nindent 4 }}
+  policyTypes:
+    - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/instance: {{ .Release.Name }}
+          app.kubernetes.io/part-of: {{ include "threadfix.name" . }}
+    ports:
+    - protocol: TCP
+      port: 8077
+{{- end -}}

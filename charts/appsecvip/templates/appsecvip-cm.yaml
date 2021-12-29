@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "threadfix.appsecvip.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+data:
+  kafka.minPartionCount: {{ default .Values.kafka.minPartionCount .Values.global.threadfix.appsecvip.kafkaMinPartionCount | quote }}
+  kafka.maxProcessingTimeMS: {{ default .Values.kafka.maxProcessingTimeMS .Values.global.threadfix.appsecvip.kafkaMaxProcessingTimeMS | quote }}
+  kafka.maxRequestSize: {{ default .Values.kafka.maxRequestSize .Values.global.threadfix.appsecvip.kafkaMaxRequestSize | quote }}

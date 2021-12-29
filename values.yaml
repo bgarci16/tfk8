@@ -1,0 +1,230 @@
+appsec:
+  enabled: true
+  redis:
+    auth:
+      existingSecret: tf-session-plugin-secret
+appsecdata:
+  enabled: true
+appsecimporter:
+  enabled: true
+appsecvip:
+  enabled: true
+auth:
+  enabled: true
+  redis:
+    auth:
+      existingSecret: tf-session-plugin-secret
+crud:
+  enabled: true
+db:
+  enabled: true
+  # username: ThreadFix
+  # password: PASSWORD
+defect:
+  enabled: true
+importer:
+  enabled: true
+jobcoordinator:
+  enabled: true
+processor:
+  enabled: true
+provider:
+  enabled: true
+queue:
+  enabled: true
+ui:
+  enabled: true
+websocket:
+  enabled: true
+consecimporter:
+  enabled: false
+kong:
+  enabled: true
+  env:
+    database: "postgres"
+  admin:
+    enabled: true
+    type: ClusterIP
+    http:
+      enabled: true
+    tls:
+      enabled: false
+  ingressController:
+    image:
+      repository: kong/kubernetes-ingress-controller
+    installCRDs: false
+    ingressClass: tf-kong
+  postgresql:
+    postgresqlPassword: kong
+    enabled: true
+    postgresqlUsername: kong
+    postgresqlDatabase: kong
+    persistence:
+      size: 1G
+  portal:
+    enabled: false
+  proxy:
+    tls:
+      servicePort: 443
+  tls:
+    enabled: false
+  plugins:
+    configMaps:
+    - name: kong-plugin-tf-session
+      pluginName: tf-session
+kafka:
+  enabled: true
+zk:
+  enabled: true
+minio:
+  enabled: true
+  mountPath: "/export"
+  # Number of drives attached to a node
+  drivesPerNode: 1
+  # Number of MinIO containers running
+  replicas: 4
+  # Number of expanded MinIO clusters
+  zones: 1
+  # nameOverride:
+  # fullnameOverride:
+  service:
+    type: ClusterIP
+    clusterIP: ~
+    port: 9000
+    nodePort: 32000
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: true
+    existingSecret: tf-session-plugin-secret
+  master:
+    persistence:
+      enabled: false
+    containerPort: 6379
+  replica:
+    replicaCount: 0
+    persistence:
+      enabled: false
+  service:
+    type: ClusterIP
+    port: 6379
+
+
+global:
+  minio: {}
+  redis:
+    servicePort: 6379
+  threadfix:
+    featureToggles:
+      FEATURE_TOGGLES_CONSEC_UI: false
+      FEATURE_TOGGLES_CONSEC_PROVIDERS: false
+    ingressClass: tf-kong
+    # imageTag: 3.4.0
+    # imageRegistry: docker.io
+    # imagePullPolicy: IfNotPresent
+    # licenseCMOverride:
+    # configSecretsOverride:
+    # springProfilesActive: prod
+    appsec:
+      # nameOverride:
+      # fullnameOverride:
+      servicePort: 8080
+    auth:
+      servicePort: 8050
+      # nameOverride:
+      # fullnameOverride:
+    crud: 
+      servicePort: 8070
+      # nameOverride:
+      # fullnameOverride:
+    db: {}
+      # globallyQuoted: false
+      # portOverride: 
+      # type: mysql
+      # vibur:
+      #   cacheSize: 0
+      #   idleConnectionLimit: 30
+      #   maxPool: 100
+      #   minPool: 0
+    defect: 
+      servicePort: 8099
+      # nameOverride:
+      # fullnameOverride:
+    importer: 
+      servicePort: 8060
+      # nameOverride:
+      # fullnameOverride:
+    kafka:
+      externalPort: 9092
+      # nameOverride:
+      # fullnameOverride:
+    processor:
+      servicePort: 8077
+      # nameOverride:
+      # fullnameOverride:
+    provider:
+      servicePort: 8095
+      # nameOverride:
+      # fullnameOverride:
+    ui: 
+      servicePort: 80
+      # nameOverride:
+      # fullnameOverride:
+    websocket: 
+      servicePort: 8085
+      # nameOverride:
+      # fullnameOverride:
+    zk:
+      clientPort: 2181
+      # nameOverride:
+      # fullnameOverride:
+    appsecvip:
+      clientPort: 8080
+      # nameOverride:
+      # fullnameOverride:
+    appsecdata:
+      clientPort: 8080
+      # nameOverride:
+      # fullnameOverride:
+    appsecimporter:
+      clientPort: 8080
+      # nameOverride:
+      # fullnameOverride:
+    queue:
+      clientPort: 8080
+      # nameOverride:
+      # fullnameOverride:
+    jobcoordinator:
+      clientPort: 8080
+      # nameOverride:
+      # fullnameOverride:
+
+
+
+    consecimporter:
+      servicePort: 8040
+      # nameOverride:
+      # fullnameOverride:
+
+# "network.properties":
+# "ESAPI.properties":
+# "validation.properties":
+# "logback-all.xml":
+# "logback-appsec.xml":
+# "onelogin.saml.properties":
+
+"threadfix.license":
+
+networkPolicy:
+  enabled: true
+
+#"kongCMOverride":
+
+
+esapi:
+ esapiProperties: {}
+#    ESAPI.MasterKey: 
+ validationProperties: {}
+saml:
+  properties: {}

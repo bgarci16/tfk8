@@ -1,0 +1,93 @@
+suite: zk images
+templates:
+  - zk-sts.yaml
+tests:
+  - it: zk local image tag
+    set:
+      image.tag: 3.0.3
+    asserts:
+      - isKind:
+          of: StatefulSet
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: confluentinc/cp-zookeeper:3.0.3
+  - it: zk global threadfix image tag (no effect)
+    set:
+      global.threadfix.imageTag: 3.0.3
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: confluentinc/cp-zookeeper:.*
+  - it: zk repository
+    set:
+      image.repository: custom-image
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: custom-image
+  - it: zk local registry
+    set:
+      image.registry: custom.repos.example.com/foo
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ^custom.repos.example.com/foo/[a-z]
+  - it: zk threadfix registry (no effect)
+    set:
+      global.threadfix.imageRegistry: custom.repos.example.com/foo
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: confluentinc/cp-zookeeper:5.5.0
+  - it: zk global registry
+    set:
+      global.imageRegistry: custom.repos.example.com/foo
+      global.threadfix.imageRegistry: foobar
+      image.registry: foobar
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ^custom.repos.example.com/foo/[a-z]
+  - it: zk all image things
+    set:
+      image.registry: custom.repos.example.com/foo
+      image.repository: custom-image
+      image.tag: 3.0.3
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: custom.repos.example.com/foo/custom-image:3.0.3
+  - it: zk image override
+    set:
+      imageOverride: custom.repos.example.com/foo/custom-image:3.0.3
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: custom.repos.example.com/foo/custom-image:3.0.3
+  - it: zk image override precidence
+    set:
+      imageOverride: custom.repos.example.com/foo/custom-image:3.0.3
+      image.tag: 3.0.6
+      image.registry: bad
+      image.repository: bad
+      global.threadfix.imageRegistry: bad
+      global.imageRegistry: example.com/foo
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: custom.repos.example.com/foo/custom-image:3.0.3
+  - it: zk local image pull policy
+    set:
+      image.pullPolicy: Never
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].imagePullPolicy
+          value: Never
+  - it: zk global image pull policy
+    set:
+      global.imagePullPolicy: Never
+      image.pullPolicy: IfNotPresent
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].imagePullPolicy
+          value: Never

@@ -1,0 +1,12 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongIngress
+metadata:
+  name: threadfix-rest
+  namespace: {{ .Release.Namespace }}
+proxy: {}
+route:
+  preserve_host: true
+  protocols:
+  - https
+  regex_priority: 0
+  strip_path: true

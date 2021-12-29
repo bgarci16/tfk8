@@ -1,0 +1,110 @@
+suite: provider db connection
+templates:
+  - provider-deploy.yaml
+tests:
+  - it: provider global threadfix hostname override
+    set:
+      global.threadfix.db.hostnameOverride: example.com
+      db.hostnameOverride: example-1.com
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].command[2]
+          value: until nc example.com 3306 -w1 ; do echo waiting for db; sleep 2; done;
+      - contains:
+          path: spec.template.spec.initContainers[2].env
+          content:
+            name: SPRING_DATASOURCE_URL
+            value: "jdbc:mariadb://example.com:3306/provider?autoReconnect=true&useSSL=false"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_DATASOURCE_URL
+            value: "jdbc:mariadb://example.com:3306/provider?autoReconnect=true&useSSL=false"
+  - it: provider global threadfix port override
+    set:
+      global.threadfix.db.portOverride: 999
+      db.portOverride: 3306
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].command[2]
+          value: until nc RELEASE-NAME-db 999 -w1 ; do echo waiting for db; sleep 2; done;
+      - contains:
+          path: spec.template.spec.initContainers[2].env
+          content:
+            name: SPRING_DATASOURCE_URL
+            value: "jdbc:mariadb://RELEASE-NAME-db:999/provider?autoReconnect=true&useSSL=false"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_DATASOURCE_URL
+            value: "jdbc:mariadb://RELEASE-NAME-db:999/provider?autoReconnect=true&useSSL=false"
+  - it: provider local port override
+    set:
+      db.portOverride: 999
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].command[2]
+          value: until nc RELEASE-NAME-db 999 -w1 ; do echo waiting for db; sleep 2; done;
+      - contains:
+          path: spec.template.spec.initContainers[2].env
+          content:
+            name: SPRING_DATASOURCE_URL
+            value: "jdbc:mariadb://RELEASE-NAME-db:999/provider?autoReconnect=true&useSSL=false"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_DATASOURCE_URL
+            value: "jdbc:mariadb://RELEASE-NAME-db:999/provider?autoReconnect=true&useSSL=false"        
+  - it: provider local hostname override
+    set:
+      db.hostnameOverride: example.com
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].command[2]
+          value: until nc example.com 3306 -w1 ; do echo waiting for db; sleep 2; done;
+      - contains:
+          path: spec.template.spec.initContainers[2].env
+          content:
+            name: SPRING_DATASOURCE_URL
+            value: "jdbc:mariadb://example.com:3306/provider?autoReconnect=true&useSSL=false"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_DATASOURCE_URL
+            value: "jdbc:mariadb://example.com:3306/provider?autoReconnect=true&useSSL=false"
+  - it: provider db password
+    set:
+      db.existingSecret: my-secret
+    asserts:
+      - contains:
+          path: spec.template.spec.initContainers[2].env
+          content:
+            name: SPRING_DATASOURCE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: my-secret
+                key: password
+      - contains:
+          path: spec.template.spec.initContainers[2].env
+          content:
+            name: SPRING_DATASOURCE_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: my-secret
+                key: username
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_DATASOURCE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: my-secret
+                key: password
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SPRING_DATASOURCE_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: my-secret
+                key: username

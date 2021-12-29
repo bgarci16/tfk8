@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "threadfix.kong.cm" . }}
+  namespace: {{ .Release.Namespace }}
+data:
+  kong.admin.name: {{ template "threadfix.kong.admin.name" . }}
+  kong.admin.port: {{ include "threadfix.kong.admin.port" . | quote }}

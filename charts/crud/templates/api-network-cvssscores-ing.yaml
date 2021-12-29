@@ -1,0 +1,31 @@
+
+{{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1/Ingress" -}}
+apiVersion: networking.k8s.io/v1
+{{- else if .Capabilities.APIVersions.Has "networking.k8s.io/v1beta1/Ingress" -}}
+apiVersion: networking.k8s.io/v1beta1
+{{- else -}}
+apiVersion: extensions/v1beta1
+{{- end }}
+kind: Ingress
+metadata:
+  annotations:
+    konghq.com/override: api-network-cvssscores
+    kubernetes.io/ingress.class: {{ include "threadfix.ingress.class" . }}
+  name: api-network-cvssscores
+  namespace: {{ .Release.Namespace }}
+spec:
+  rules:
+  - http:
+      paths:
+      - backend:
+          {{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1/Ingress" }}
+          service:
+            name:  {{ include "threadfix.crud.fullname" . }}-api
+            port:
+              number: {{ include "threadfix.crud.servicePort" . }}
+        pathType: Prefix
+          {{- else }}
+          serviceName: {{ include "threadfix.crud.fullname" . }}-api
+          servicePort: {{ include "threadfix.crud.servicePort" . }}
+          {{- end }}
+        path: /api/network/cvssscores

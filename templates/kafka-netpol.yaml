@@ -1,0 +1,29 @@
+{{- if and .Values.networkPolicy.enabled .Values.kafka.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-allow-kafka
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+   matchLabels:
+    {{- include "threadfix.kafka.selectorLabels" . | nindent 4 }}
+  policyTypes:
+    - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/instance: {{ .Release.Name }}
+          app.kubernetes.io/part-of: {{ include "threadfix.name" . }}
+    ports:
+    - protocol: TCP
+      port: {{ include "threadfix.kafka.externalPort" . }}
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "threadfix.kafka.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: {{ default 29092 .Values.kafka.internalPort | int }}
+{{- end -}}

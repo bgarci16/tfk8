@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "threadfix.kafka.fullname" . }}
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  namespace: {{ .Release.Namespace }}
+  {{- with .Values.annotations }}
+  annotations:
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "threadfix.kafka.selectorLabels" . | nindent 6 }}
+  serviceName: {{ include "threadfix.kafka.fullname" . }}
+  replicas: {{ .Values.replicaCount }}
+  updateStrategy:
+    type: RollingUpdate
+  podManagementPolicy: OrderedReady
+  template:
+    metadata:
+      labels:
+        {{- include "threadfix.kafka.selectorLabels" . | nindent 8 }}
+    spec:
+    {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      serviceAccountName: {{ include "threadfix.self.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if eq "true" ( include "threadfix.wait.enabled" . ) }}
+      initContainers:
+        - name: wait-for-zookeeper
+          image: {{ include "threadfix.wait.image" . }}
+          imagePullPolicy: {{ include "threadfix.wait.image.pullPolicy" . }}
+          command: ['sh', '-c', 'until nc {{ include "threadfix.zk.fullname" . }}-cs:{{ template "threadfix.zk.clientPort" . }} -w1 ; do echo waiting for zookeeper; sleep 2; done;']
+      {{- end }}
+      containers:
+        - env:
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: LISTENER_DOCKER_INTERNAL
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL:PLAINTEXT
+            - name: KAFKA_LOG4J_LOGGERS
+              value: kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=WARN,state.change.logger=WARN,kafka=WARN
+            - name: KAFKA_LOG4J_ROOT_LOGLEVEL
+              value: WARN
+            - name: KAFKA_TOOLS_LOG4J_LOGLEVEL
+              value: ERROR
+            - name: KAFKA_ZOOKEEPER_CONNECT
+              value: "{{ include "threadfix.zk.fullname" . }}-hs:{{ template "threadfix.zk.clientPort" . }}"
+            - name: KAFKA_CONFLUENT_SUPPORT_METRICS_ENABLE
+              value: 'false'
+            {{- include "threadfix.kafka.env" . | nindent 12 }}
+          image: {{ include "thirdparty.image" . | quote }}
+          imagePullPolicy: {{ template "thirdparty.image.pullPolicy" .  }}
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                - kafka-server-stop
+          name: broker
+          ports:
+            - containerPort: {{ template "threadfix.kafka.externalPort" . }}
+              name: external
+            - containerPort: {{ .Values.internalPort }}
+              name: internal
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: datadir
+              mountPath: /var/lib/kafka
+          command:
+            - /bin/bash
+            - -c
+            - |
+              export KAFKA_BROKER_ID=${HOSTNAME##*-} && \
+              export KAFKA_ADVERTISED_LISTENERS="LISTENER_DOCKER_INTERNAL://${HOSTNAME}.{{ include "threadfix.kafka.fullname" . }}:{{ .Values.internalPort }},LISTENER_DOCKER_EXTERNAL://${HOSTNAME}.{{ include "threadfix.kafka.fullname" . }}:{{ template "threadfix.kafka.externalPort" . }}" &&\
+              mkdir -p /var/lib/kafka/{data,log} &&\
+              /etc/confluent/docker/run
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+    {{- toYaml . | nindent 8 }}
+  {{- end }}
+
+
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}

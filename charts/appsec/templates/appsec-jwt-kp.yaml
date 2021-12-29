@@ -1,0 +1,17 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: appsec-jwt
+  namespace: {{ .Release.Namespace }}
+config:
+  anonymous: anonymous
+  claims_to_verify: null
+  cookie_names:
+  - session
+  header_names: []
+  key_claim_name: iss
+  maximum_expiration: 0
+  run_on_preflight: true
+  secret_is_base64: false
+  uri_param_names: []
+plugin: jwt

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-plugin-tf-session
+  namespace: {{ .Release.Namespace }}
+data:
+  {{- (.Files.Glob "plugins/kong/tf-session/*.lua").AsConfig | nindent 2 }}

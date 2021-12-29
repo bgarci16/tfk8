@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ template "threadfix.db.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  {{- with .Values.annotations }}
+  annotations: 
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "threadfix.db.selectorLabels" . | nindent 6 }}
+  serviceName: {{ include "threadfix.db.fullname" . }}
+  replicas: 1
+  updateStrategy:
+    type: RollingUpdate
+  podManagementPolicy: OrderedReady
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        {{- include "threadfix.db.selectorLabels" . | nindent 8 }}
+    spec:
+      {{ include "threadfix.imagePullSecrets" . | indent 6 }}
+      serviceAccountName: {{ include "threadfix.self.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: mysql
+          image: {{ include "thirdparty.image" . | quote }}
+          imagePullPolicy: {{ include "thirdparty.image.pullPolicy" . }}
+          env:
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: username
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: password
+            - name: MYSQL_RANDOM_ROOT_PASSWORD
+              value: "true"
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ include "threadfix.springProfilesActive" . | quote }}
+          ports:
+            - containerPort: 3306
+              name: mysql
+          volumeMounts:
+            - name: mysql-persistent-storage
+              mountPath: /var/lib/mysql
+            - name: mysql-initdb
+              mountPath: /docker-entrypoint-initdb.d
+            - name: mysqld-cnf
+              mountPath: /etc/mysql/conf.d/
+          args:
+            - "mysqld"
+            - "--max_allowed_packet=1G"
+            - "--lower_case_table_names=1"
+            - "--max_connections=500"
+            - "--ignore-db-dir=lost+found"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: mysql-initdb
+          configMap:
+            name: mysql-config
+            items:
+            - key: db-init
+              path: create-mysqldb.sql
+        - name: mysqld-cnf
+          configMap:
+            name: mysql-config
+            items:
+            - key: mysqld-cnf
+              path: mysqld.cnf
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+
+
+  volumeClaimTemplates:
+    - metadata:
+        name: mysql-persistent-storage
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}
+      

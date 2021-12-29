@@ -1,0 +1,190 @@
+<configuration debug="true">
+    <springProperty name="springAppName" source="spring.application.fullname" defaultValue=""/>
+    <property name="CONSOLE_LOG_PATTERN" scope="context"
+              value="%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) [${springAppName}] %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <springProfile name="local,dev,perf">
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+    </springProfile>
+    <springProfile name="int,qa,uat,prod">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <layout class="ch.qos.logback.classic.PatternLayout">
+                <pattern>%d %green([%thread]) %highlight(%-5level) %cyan(%logger{15}) - %msg %n</pattern>
+            </layout>
+        </appender>
+    </springProfile>
+    <appender name="Async-Console-Appender" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <appender-ref ref="CONSOLE"/>
+    </appender>
+    <springProfile name="local,dev">
+        <logger name="com.denimgroup.threadfix" level="WARN" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+        <logger name="com.denimgroup.threadfix.network" level="WARN" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <logger name="com.denimgroup.threadfix.appsec" level="WARN" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <!-- JobCoordinator -->
+        <logger name="com.denimgroup.threadfix.coordinator" level="INFO" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <!-- AppSec Ingestion -->
+
+        <logger name="com.denimgroup.threadfix.appsec.ingestion" level="INFO" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <!-- <logger name="com.denimgroup.threadfix.appsec.ingestion.importer" level="INFO" additivity="false">
+             <appender-ref ref="Async-Console-Appender"/>
+         </logger>
+
+         <logger name="com.denimgroup.threadfix.appsec.ingestion.processor" level="INFO" additivity="false">
+             <appender-ref ref="Async-Console-Appender"/>
+         </logger>
+
+         <logger name="com.denimgroup.threadfix.appsec.ingestion.writer" level="INFO" additivity="false">
+             <appender-ref ref="Async-Console-Appender"/>
+         </logger>-->
+
+        <logger name="com.denimgroup.threadfix.common" level="DEBUG" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <logger name="com.denimgroup.threadfix.api" level="DEBUG" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <!-- Kafka -->
+        <logger name="org.apache.kafka" level="WARN" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <logger name="org.apache.kafka.clients" level="WARN" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <!-- Spring -->
+        <logger name="org.springframework" level="WARN" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <!--Options for logging jdbc queries -->
+        <!--<logger name="org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate" level="WARN"
+                additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+        <logger name="org.springframework.jdbc.core.JdbcTemplate" level="DEBUG" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+        <logger name="org.springframework.transaction" level="DEBUG" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>-->
+
+        <logger name="com.denimgroup.threadfix.consec" level="INFO" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <root level="WARN">
+            <appender-ref ref="Async-Console-Appender"/>
+        </root>
+    </springProfile>
+    <springProfile name="int,qa,uat">
+        <logger name="com.denimgroup.threadfix" level="WARN" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+        <logger name="com.denimgroup.threadfix.network" level="WARN" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+        <logger name="com.denimgroup.threadfix.network.service" level="INFO" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+        <logger name="com.denimgroup.threadfix.network.messaging.producer" level="INFO" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+        <logger name="com.denimgroup.threadfix.network.search.receivers" level="INFO" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+        <logger name="com.denimgroup.threadfix.network.processor" level="INFO" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <!-- JobCoordinator -->
+        <logger name="com.denimgroup.threadfix.coordinator" level="INFO" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <!-- AppSec Ingestion -->
+
+        <logger name="com.denimgroup.threadfix.appsec.ingestion" level="INFO" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <!-- <logger name="com.denimgroup.threadfix.appsec.ingestion.importer" level="INFO" additivity="false">
+             <appender-ref ref="Async-Console-Appender"/>
+         </logger>
+
+         <logger name="com.denimgroup.threadfix.appsec.ingestion.processor" level="INFO" additivity="false">
+             <appender-ref ref="Async-Console-Appender"/>
+         </logger>
+
+         <logger name="com.denimgroup.threadfix.appsec.ingestion.writer" level="INFO" additivity="false">
+             <appender-ref ref="Async-Console-Appender"/>
+         </logger>-->
+
+        <logger name="com.denimgroup.threadfix.common" level="INFO" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <logger name="com.denimgroup.threadfix.api" level="INFO" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <logger name="com.denimgroup.threadfix.consec" level="INFO" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <!-- Kafka Logging -->
+        <logger name="org.apache.kafka" level="WARN" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <logger name="org.apache.kafka.clients" level="WARN" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <logger name="org.apache.kafka.network" level="WARN" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <!-- Spring Logging -->
+        <logger name="org.springframework" level="WARN" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+
+        <root level="WARN">
+            <appender-ref ref="Async-Console-Appender"/>
+        </root>
+    </springProfile>
+    <springProfile name="perf">
+        <root level="WARN">
+            <appender-ref ref="Async-Console-Appender"/>
+        </root>
+    </springProfile>
+    <springProfile name="production">
+        <logger name="com.denimgroup.threadfix.network" level="WARN" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+        <logger name="org.apache.kafka" level="WARN" additivity="false">
+            <appender-ref ref="Async-Console-Appender"/>
+        </logger>
+        <root level="ERROR">
+            <appender-ref ref="Async-Console-Appender"/>
+        </root>
+    </springProfile>
+</configuration>

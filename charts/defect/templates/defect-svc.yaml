@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  name: {{ template "threadfix.defect.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+  - port: {{ template "threadfix.defect.servicePort" . }}
+    protocol: TCP
+    targetPort: 8099
+  selector:
+    {{- include "threadfix.defect.selectorLabels" . | nindent 4 }}
+

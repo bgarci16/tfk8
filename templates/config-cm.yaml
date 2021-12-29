@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  namespace: {{ .Release.Namespace }}
+data:
+  {{- if ( index .Values "logback-all.xml" ) }}
+  logback-all.xml: {{ index .Values "logback-all.xml" | quote }}
+  {{- else }}
+  logback-all.xml: |
+    {{ .Files.Get "config/logback-all.xml" | nindent 4 }}
+  {{- end }}
+  {{- if ( index .Values "logback-appsec.xml" ) }}
+  logback-appsec.xml: {{ index .Values "logback-appsec.xml" | quote }}
+  {{- else }}
+  logback-appsec.xml: |
+    {{ .Files.Get "config/logback-appsec.xml" | nindent 4 }}
+  {{- end }}
+  logback-appsec-dev.xml: |
+    {{ .Files.Get "config/logback-appsec-dev.xml" | nindent 4 }}
+  logback-appsec-qa.xml: |
+    {{ .Files.Get "config/logback-appsec-qa.xml" | nindent 4 }}

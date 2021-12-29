@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "threadfix.queue.fullname" . }}
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  {{- include "threadfix.self.progressDeadlineSeconds" . | nindent 2 }}
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "threadfix.queue.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "threadfix.queue.selectorLabels" . | nindent 8 }}
+    spec:
+      {{ include "threadfix.imagePullSecrets" . | indent 6 }}
+      serviceAccountName: {{ include "threadfix.self.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if eq "true" ( include "threadfix.wait.enabled" . ) }}
+      initContainers:
+        {{ include "threadfix.waitForDB" . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ template "threadfix.queue.fullname" . }}
+          {{- $probeValues := dict }}
+          {{- $_ := set $probeValues "livenessPath" "/actuator/health/liveness" }}
+          {{- $_ := set $probeValues "readinessPath" "/actuator/health/readiness" }}
+          {{- $_ := set $probeValues "port" "http" -}}
+          {{- include "threadfix.probes" (dict "args" $probeValues "context" . ) | indent 10 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ template "threadfix.image" . }}
+          imagePullPolicy: {{ template "threadfix.image.pullPolicy" . }}
+          env:
+            - name: api.gateway.host
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ template "threadfix.kong.cm" . }}
+                  key: kong.admin.name
+            - name: api.gateway.port
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ template "threadfix.kong.cm" . }}
+                  key: kong.admin.port
+            - name: LOGGING_CONFIG
+              value: /opt/logback-all.xml
+            - name: SPRING_DATASOURCE_DRIVER-CLASS-NAME
+              value: "{{ template "threadfix.db.driver" . }}"
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: password
+            - name: SPRING_DATASOURCE_URL
+              value: "{{ template "threadfix.queue.db.url" . }}"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: username
+            - name: SPRING_DATASOURCE_HIKARI_MINIMUM-IDLE
+              value: "{{ template "threadfix.db.pool.minPool" . }}"
+            - name: SPRING_DATASOURCE_HIKARI_MAXIMUM-POOL-SIZE
+              value: "{{ template "threadfix.db.pool.maxPool" . }}"
+            - name: SPRING_JPA_PROPERTIES_HIBERNATE_GLOBALLY_QUOTED_IDENTIFIERS
+              value: "{{ template "threadfix.db.globallyQuoted" . }}"
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ include "threadfix.springProfilesActive" . | quote }}
+            - name: SESSION_TIMEOUT_INACTIVE
+              value: {{ .Values.sessionTimeoutInactive | quote }}
+            - name: API_AUTH_HOSTNAME
+              value: "{{ template "threadfix.auth.fullname" . }}"
+            - name: SPRING_KAFKA_BOOTSTRAPSERVERS
+              value: "{{ template "threadfix.kafka.fullname" . }}:{{ include "threadfix.kafka.externalPort" . }}"
+          ports:
+            - name: http
+              containerPort: 9110
+              protocol: TCP
+          workingDir: /app
+          volumeMounts:
+            - name: tf-config
+              mountPath: /opt/logback-all.xml
+              subPath: logback-all.xml
+            - name: tf-config-secrets
+              mountPath: /opt/threadfix/esapi/ESAPI.properties
+              subPath: ESAPI.properties
+              readOnly: true
+            - name: tf-config-secrets
+              mountPath: /opt/threadfix/esapi/validation.properties
+              subPath: validation.properties
+              readOnly: true
+            - name: tf-config-secrets
+              mountPath: /opt/saml/onelogin.saml.properties
+              subPath: onelogin.saml.properties
+              readOnly: true
+            - name: working-dir
+              mountPath: /app
+            {{- if .Values.extraVolumeMounts }}
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      volumes:
+      - name: tf-config
+        configMap:
+          name: {{ .Release.Name }}-config
+      - name: tf-config-secrets
+        secret:
+          secretName: {{ template "threadfix.config.secrets" . }}
+      - name: working-dir
+        emptyDir: {}
+      {{- if .Values.extraVolumes }}
+      {{- toYaml .Values.extraVolumes | nindent 6 }}
+      {{- end }}
+
+          
+

@@ -1,0 +1,93 @@
+appsec:
+  resources:
+    requests:
+      memory: 8448Mi
+    limits:
+      memory: 10Gi
+auth:
+  resources:
+    requests:
+      memory: 768Mi
+    limits:
+      memory: 1536Mi
+crud:
+  resources:
+    requests:
+      memory: 1Gi
+    limits:
+      memory: 3Gi
+db:
+  "mysqld.cnf": |
+    [mysqld]
+    innodb-buffer-pool-size=1073741824
+  resources:
+    requests:
+      memory: 2560Mi
+    limits:
+      memory: 3Gi
+defect:
+  resources:
+    requests:
+      memory: 1Gi
+    limits:
+      memory: 3Gi
+importer:
+  resources:
+    requests:
+      memory: 1Gi
+    limits:
+      memory: 3Gi
+kafka:
+  resources:
+    requests:
+      memory: 1536Mi
+    limits:
+      memory: 4Gi
+kong:
+  resources:
+    requests:
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  postgresql:
+    resources:
+      requests:
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+processor:
+  resources:
+    requests:
+      memory: 1Gi
+    limits:
+      memory: 3Gi
+provider:
+  resources:
+    requests:
+      memory: 768Mi
+    limits:
+      memory: 2Gi
+ui:
+  resources:
+    requests:
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+websocket:
+  resources:
+    requests:
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+zk:
+  resources:
+    requests:
+      memory: 768Mi
+    limits:
+      memory: 1Gi
+consecimporter:
+  resources:
+    requests:
+      memory: 1Gi
+    limits:
+      memory: 3Gi

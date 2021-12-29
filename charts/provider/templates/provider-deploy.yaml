@@ -1,0 +1,169 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  name: {{ include "threadfix.provider.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  {{- with .Values.annotations }}
+  annotations:
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- include "threadfix.self.progressDeadlineSeconds" . | nindent 2 }}
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "threadfix.provider.selectorLabels" . | nindent 6 }}
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ .Values.global.threadfix.featureToggles | toString | sha256sum }}
+      creationTimestamp: null
+      labels:
+        {{- include "threadfix.provider.selectorLabels" . | nindent 8 }}
+    spec:
+      {{ include "threadfix.imagePullSecrets" . | indent 6 }}
+      serviceAccountName: {{ include "threadfix.self.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        {{ if eq "true" ( include "threadfix.wait.enabled" . ) -}}
+        {{- include "threadfix.waitForDB" . | nindent 8 }}
+        {{- include "threadfix.waitForKafka" . | nindent 8 }}
+        {{- end }}
+        - name: {{ include "threadfix.provider.fullname" . }}-migration
+          image: {{ template "threadfix.migration.image" . }}
+          imagePullPolicy: {{ template "threadfix.migration.image.pullPolicy" . }}
+          env:
+            - name: SPRING_DATASOURCE_DRIVERCLASSNAME
+              value: "{{ template "threadfix.db.driver" . }}"
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: password
+            - name: SPRING_DATASOURCE_URL
+              value: {{ include "threadfix.provider.db.url" . | quote }}
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: username
+            - name: SPRING_DATASOURCE_HIKARI_MINIMUM-IDLE
+              value: "{{ template "threadfix.db.pool.minPool" . }}"
+            - name: SPRING_DATASOURCE_HIKARI_MAXIMUM-POOL-SIZE
+              value: "{{ template "threadfix.db.pool.maxPool" . }}"
+            - name: SPRING_FLYWAY_CLEANDISABLED
+              value: "true"
+            - name: SPRING_FLYWAY_CONNECT-RETRIES
+              value: "300"
+            - name: SPRING_FLYWAY_LOCATIONS
+              value: "classpath:/db/migration/{vendor}"
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ include "threadfix.springProfilesActive" . | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config-flags
+          {{- if .Values.migration.extraVolumeMounts }}
+          volumeMounts:
+            {{- toYaml .Values.migration.extraVolumeMounts | nindent 12 }}
+          {{- end }}
+      containers:
+        - name: provider
+          {{- $probeValues := dict }}
+          {{- $_ := set $probeValues "livenessPath" "/actuator/health/liveness" }}
+          {{- $_ := set $probeValues "readinessPath" "/actuator/health/readiness" }}
+          {{- $_ := set $probeValues "port" "http" -}}
+          {{- include "threadfix.probes" (dict "args" $probeValues "context" . ) | indent 10 }}
+          securityContext:
+              {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ template "threadfix.image" . }}
+          imagePullPolicy: {{ template "threadfix.image.pullPolicy" .  }}
+          env:
+            - name: API_AUTH_HOSTNAME
+              value: "{{ template "threadfix.auth.fullname" . }}"
+            - name: API_GATEWAY_PREFIX
+              value: /api
+            - name: IMPORTER_HOST
+              value: "{{ template "threadfix.importer.fullname" . }}"
+            - name: IMPORTER_PORT
+              value: "{{ template "threadfix.importer.servicePort" . }}"
+            - name: CONSEC-IMPORTER_HOST
+              value: "{{ template "threadfix.consecimporter.fullname" . }}"
+            - name: CONSEC-IMPORTER_PORT
+              value: "{{ template "threadfix.consecimporter.servicePort" . }}"
+            - name: LOGGING_CONFIG
+              value: /opt/logback-all.xml
+            - name: SPRING_CLOUD_STREAM_KAFKA_STREAMS_BINDER_BROKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "threadfix.kafka.cm" . }}
+                  key: advertised-listeners
+            - name: SPRING_DATASOURCE_DRIVERCLASSNAME
+              value: "{{ template "threadfix.db.driver" . }}"
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: password
+            - name: SPRING_DATASOURCE_URL
+              value: {{ include "threadfix.provider.db.url" . | quote }}
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: username
+            - name: SPRING_KAFKA_BOOTSTRAPSERVERS
+              value: "{{ template "threadfix.kafka.fullname" . }}:{{ include "threadfix.kafka.externalPort" . }}"
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ include "threadfix.springProfilesActive" . | quote }}
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ .Values.javaOpts | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config-flags
+          ports:
+            - name: http
+              containerPort: 8095
+              protocol: TCP
+          volumeMounts:
+            - name: tf-config
+              mountPath: /opt/logback-all.xml
+              subPath: logback-all.xml
+            - name: network-props
+              mountPath: /threadfix/network/config/network.properties
+              subPath: network.properties
+            - name: working-dir
+              mountPath: /app
+            {{- if .Values.extraVolumeMounts }}
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+            {{- end }}
+          workingDir: /app
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      volumes:
+      - name: tf-config
+        configMap:
+          name: {{ .Release.Name }}-config
+      - name: network-props
+        secret:
+          secretName: {{ .Release.Name }}-network-props
+      - name: working-dir
+        emptyDir: {}
+      {{- if .Values.extraVolumes }}
+      {{- toYaml .Values.extraVolumes | nindent 6 }}
+      {{- end }}

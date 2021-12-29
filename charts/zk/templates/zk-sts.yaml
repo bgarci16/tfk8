@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "threadfix.zk.fullname" . }}
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  {{- with .Values.annotations }}
+  annotations:
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "threadfix.zk.selectorLabels" . | nindent 6 }}
+  serviceName: {{ include "threadfix.zk.fullname" . }}-hs
+  replicas: {{ .Values.replicaCount }}
+  updateStrategy:
+    type: RollingUpdate
+  podManagementPolicy: Parallel
+  template:
+    metadata:
+      labels:
+        {{- include "threadfix.zk.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "threadfix.self.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: zk
+          imagePullPolicy: {{ include "thirdparty.image.pullPolicy" . }}
+          image: {{ include "thirdparty.image" . | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          ports:
+            - containerPort: {{ include "threadfix.zk.clientPort" . }}
+              name: client
+            - containerPort: 2888
+              name: server
+            - containerPort: 3888
+              name: leader-election
+          env:
+            - name: ZOOKEEPER_CLIENT_PORT
+              value: {{ include "threadfix.zk.clientPort" . | quote }}
+            - name: ZOOKEEPER_SERVERS
+              value: {{ include "threadfix.zk.servers" . }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              export ZOOKEEPER_SERVER_ID=$((${HOSTNAME##*-}+1)) &&\
+              mkdir -p /var/lib/zookeeper/{data,log} &&\
+              /etc/confluent/docker/run
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "echo ruok | nc -q 1 127.0.0.1 {{ include "threadfix.zk.clientPort" . }}"
+            initialDelaySeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: datadir
+              mountPath: /var/lib/zookeeper
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+    {{- toYaml . | nindent 8 }}
+    {{- end }}
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: {{ .Values.storage.size }}

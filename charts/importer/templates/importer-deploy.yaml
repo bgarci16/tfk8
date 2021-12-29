@@ -1,0 +1,153 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  name: {{ include "threadfix.importer.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  {{- with .Values.annotations }}
+  annotations:
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- include "threadfix.self.progressDeadlineSeconds" . | nindent 2 }}
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "threadfix.importer.selectorLabels" . | nindent 6 }}
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ .Values.global.threadfix.featureToggles | toString | sha256sum }}
+      creationTimestamp: null
+      labels:
+        {{- include "threadfix.importer.selectorLabels" . | nindent 8 }}
+    spec:
+      {{ include "threadfix.imagePullSecrets" . | indent 6 }}
+      serviceAccountName: {{ include "threadfix.self.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if eq "true" ( include "threadfix.wait.enabled" . ) }}
+      initContainers:
+        {{ include "threadfix.waitForProvider" . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: importer
+          {{- $probeValues := dict }}
+          {{- $_ := set $probeValues "livenessPath" "/actuator/health/liveness" }}
+          {{- $_ := set $probeValues "readinessPath" "/actuator/health/readiness" }}
+          {{- $_ := set $probeValues "port" "http" -}}
+          {{- include "threadfix.probes" (dict "args" $probeValues "context" . ) | indent 10 }}
+          securityContext:
+              {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ template "threadfix.image" . }}
+          imagePullPolicy: {{ template "threadfix.image.pullPolicy" .  }}
+          env:
+            - name: API_AUTH_HOSTNAME
+              value: {{ template "threadfix.auth.fullname" . }}
+            - name: CRUD_HOST
+              value: {{ template "threadfix.crud.fullname" . }}
+            - name: CRUD_PORT
+              value: "{{ template "threadfix.crud.servicePort" . }}"
+            - name: LICENSE_LOCATION
+              value: /opt/threadfix.license
+            - name: LOGGING_CONFIG
+              value: /opt/logback-all.xml
+            - name: PROVIDER_HOST
+              value: {{ template "threadfix.provider.fullname" . }}
+            - name: PROVIDER_PORT
+              value: "{{ template "threadfix.provider.servicePort" . }}"
+            - name: SPRING_CLOUD_STREAM_KAFKA_STREAMS_BINDER_BROKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "threadfix.kafka.cm" . }}
+                  key: advertised-listeners
+            - name: SPRING_KAFKA_BOOTSTRAPSERVERS
+              value: "{{ template "threadfix.kafka.fullname" . }}:{{ include "threadfix.kafka.externalPort" . }}"
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ include "threadfix.springProfilesActive" . | quote }}
+            - name: SPRING_DATASOURCE_DRIVERCLASSNAME
+              value: "{{ template "threadfix.db.driver" . }}"
+            - name: SPRING_DATASOURCE_URL
+              value: {{ include "threadfix.crud.db.url" . | quote }}
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: password
+            - name: SPRING_DATASOURCE_HIKARI_MINIMUM-IDLE
+              value: "{{ template "threadfix.db.pool.minPool" . }}"
+            - name: SPRING_DATASOURCE_HIKARI_MAXIMUM-POOL-SIZE
+              value: "{{ template "threadfix.db.pool.maxPool" . }}"
+            - name: TMPDIR
+              value: /opt/threadfix/infrasec/scans
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ .Values.javaOpts | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config-flags
+          ports:
+            - name: http
+              containerPort: 8060
+              protocol: TCP
+          volumeMounts:
+            - name: tf-config
+              mountPath: /opt/logback-all.xml
+              subPath: logback-all.xml
+            - name: network-props
+              mountPath: /threadfix/network/config/network.properties
+              subPath: network.properties
+            - name: tf-license
+              mountPath: /opt/threadfix.license
+              subPath: threadfix.license
+              readOnly: true
+            - name: scan-data-dir
+              mountPath: /opt/threadfix/infrasec/scans
+            - name: working-dir
+              mountPath: /app
+            {{- if .Values.extraVolumeMounts }}
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+            {{- end }}
+          workingDir: /app
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+        
+      volumes:
+      - name: tf-config
+        configMap:
+          name: {{ .Release.Name }}-config
+      - name: network-props
+        secret:
+          secretName: {{ .Release.Name }}-network-props
+      - name: tf-license
+        secret:
+          secretName: {{ template "threadfix.license.cm" . }}
+          items:
+            - key: threadfix.license
+              path: threadfix.license
+      - name: working-dir
+        emptyDir: {}
+      {{- if .Values.extraVolumes }}
+      {{- toYaml .Values.extraVolumes | nindent 6 }}
+      {{- end }}
+      - name: scan-data-dir
+        emptyDir: {}
+

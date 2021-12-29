@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  name: {{ template "threadfix.appsecimporter.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+  - port: {{ template "threadfix.appsecimporter.servicePort" . }}
+    protocol: TCP
+    targetPort: 9100
+  selector:
+    {{- include "threadfix.appsecimporter.selectorLabels" . | nindent 4 }}
+

@@ -1,0 +1,24 @@
+{{- if and .Values.networkPolicy.enabled .Values.redis.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "threadfix.redis.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+   matchLabels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "threadfix.redis.name" . }}
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          {{ include "threadfix.auth.selectorLabels" . | nindent 10 }}
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/instance: {{ .Release.Name }}
+          app.kubernetes.io/name: {{ include "threadfix.kong.name" . }}
+    ports:
+    - protocol: TCP
+      port: {{ include "threadfix.redis.port" . }}
+{{- end -}}

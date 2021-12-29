@@ -1,0 +1,13 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongIngress
+metadata:
+  name: {{ include "threadfix.importer.fullname" . }}-actuator-service
+  namespace: {{ .Release.Namespace }}
+proxy:
+  connect_timeout: 60000
+  path: /actuator
+  protocol: http
+  read_timeout: 60000
+  retries: 5
+  write_timeout: 60000
+

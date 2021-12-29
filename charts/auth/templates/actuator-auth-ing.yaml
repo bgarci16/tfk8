@@ -1,0 +1,30 @@
+{{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1/Ingress" -}}
+apiVersion: networking.k8s.io/v1
+{{- else if .Capabilities.APIVersions.Has "networking.k8s.io/v1beta1/Ingress" -}}
+apiVersion: networking.k8s.io/v1beta1
+{{- else -}}
+apiVersion: extensions/v1beta1
+{{- end }}
+kind: Ingress
+metadata:
+  annotations:
+    konghq.com/override: actuator-auth
+    kubernetes.io/ingress.class: {{ include "threadfix.ingress.class" . }}
+  name: actuator-auth
+  namespace: {{ .Release.Namespace }}
+spec:
+  rules:
+  - http:
+      paths:
+      - backend:
+          {{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1/Ingress" }}
+          service:
+            name: {{ include "threadfix.auth.fullname" . }}-actuator-service
+            port:
+              number: {{ template "threadfix.auth.servicePort" . }}
+        pathType: Prefix
+          {{- else }}
+          serviceName: {{ include "threadfix.auth.fullname" . }}-actuator-service
+          servicePort: {{ template "threadfix.auth.servicePort" . }}
+          {{- end }}
+        path: /actuator/auth

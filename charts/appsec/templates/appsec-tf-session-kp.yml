@@ -1,0 +1,10 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: appsec-tf-session
+  namespace: {{ .Release.Namespace }}
+configFrom:
+  secretKeyRef:
+    name: {{ include "threadfix.redis.secret" . }}
+    key: appsec-tf-session
+plugin: tf-session

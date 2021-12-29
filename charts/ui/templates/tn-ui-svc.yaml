@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "threadfix.self.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    {{- include "threadfix.ui.selectorLabels" . | nindent 4 }}
+  ports:
+  - port: {{ template "threadfix.ui.servicePort" . }}
+    targetPort: 8080
+

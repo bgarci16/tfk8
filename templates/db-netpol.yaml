@@ -1,0 +1,28 @@
+{{- if and .Values.networkPolicy.enabled .Values.db.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-allow-db
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+   matchLabels:
+    {{ include "threadfix.db.selectorLabels" . | nindent 4 }}
+  policyTypes:
+    - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/instance: {{ .Release.Name }}
+          app.kubernetes.io/part-of: {{ include "threadfix.name" . }}
+    ports:
+    - protocol: TCP
+      port: {{ include "threadfix.db.servicePort" . }}
+  {{- if eq .Values.db.service.type "LoadBalancer" }}
+  - from: []
+    ports:
+    - protocol: TCP
+      port: {{ include "threadfix.db.servicePort" . }}
+  {{- end -}}
+{{- end -}}

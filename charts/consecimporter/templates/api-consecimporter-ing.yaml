@@ -1,0 +1,30 @@
+{{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1/Ingress" -}}
+apiVersion: networking.k8s.io/v1
+{{- else if .Capabilities.APIVersions.Has "networking.k8s.io/v1beta1/Ingress" -}}
+apiVersion: networking.k8s.io/v1beta1
+{{- else -}}
+apiVersion: extensions/v1beta1
+{{- end }}
+kind: Ingress
+metadata:
+  annotations:
+    konghq.com/override: api-consecimporter
+    kubernetes.io/ingress.class: {{ include "threadfix.ingress.class" . }}
+  name: api-consecimporter
+  namespace: {{ .Release.Namespace }}
+spec:
+  rules:
+  - http:
+      paths:
+      - backend:
+          {{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1/Ingress" }}
+          service:
+            name: {{ include "threadfix.consecimporter.fullname" . }}-api
+            port:
+              number: {{ template "threadfix.consecimporter.servicePort" . }}
+        pathType: Prefix
+          {{- else }}
+          serviceName: {{ include "threadfix.consecimporter.fullname" . }}-api
+          servicePort: {{ template "threadfix.consecimporter.servicePort" . }}
+          {{- end }}
+        path: /api/consecimporter

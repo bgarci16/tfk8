@@ -1,0 +1,30 @@
+{{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1/Ingress" -}}
+apiVersion: networking.k8s.io/v1
+{{- else if .Capabilities.APIVersions.Has "networking.k8s.io/v1beta1/Ingress" -}}
+apiVersion: networking.k8s.io/v1beta1
+{{- else -}}
+apiVersion: extensions/v1beta1
+{{- end }}
+kind: Ingress
+metadata:
+  annotations:
+    konghq.com/override: threadfix-rest
+    kubernetes.io/ingress.class: {{ include "threadfix.ingress.class" . }}
+  name: threadfix-rest
+  namespace: {{ .Release.Namespace }}
+spec:
+  rules:
+  - http:
+      paths:
+      - backend:
+          {{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1/Ingress" }}
+          service:
+            name: {{ include "threadfix.appsec.fullname" . }}-rest
+            port:
+              number: {{ template "threadfix.appsec.servicePort" . }}
+        pathType: Prefix
+          {{- else }}
+          serviceName: {{ include "threadfix.appsec.fullname" . }}-rest
+          servicePort: {{ template "threadfix.appsec.servicePort" . }}
+          {{- end }}
+        path: /threadfix/rest

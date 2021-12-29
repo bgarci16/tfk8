@@ -1,0 +1,9 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: anon-termination
+plugin: request-termination
+config:
+  body: "<html><head><script>window.location.replace('/logout');</script></head><body></body></html>"
+  status_code: 401
+  content_type: "text/html; charset=utf-8"

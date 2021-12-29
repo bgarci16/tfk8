@@ -1,0 +1,91 @@
+{{- if .Release.IsInstall -}}
+{{- if and .Values.dbInit.enabled (eq .Values.db.type "sqlserver" ) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "threadfix.appsec.fullname" . }}-db-init
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": "pre-install"
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+    "helm.sh/hook-weight": "-5"
+  {{- range $key, $value := .Values.dbInit.jobAnnotations }}
+    {{ $key }}: {{ $value | quote }}
+  {{- end }}
+spec:
+  template:
+    metadata:
+      name: appsec-db-init
+      labels:
+        {{- include "threadfix.appsec.selectorLabels" . | nindent 8 }}
+    spec:
+      initContainers:
+      {{- include "threadfix.imagePullSecrets" . | indent 6 }}
+      {{- if .Values.dbInit.serviceAccountName }}
+      serviceAccountName: {{ .Values.dbInit.serviceAccountName }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.dbInit.podSecurityContext | nindent 8 }}
+      initContainers:
+        {{- if eq "true" ( include "threadfix.wait.enabled" . ) -}}
+        {{- include "threadfix.waitForDB" . | nindent 8 }}
+        {{- end }}
+      containers:
+        - name: db-init
+          securityContext:
+            {{- toYaml .Values.dbInit.securityContext | nindent 12 }}
+          image: {{ include "threadfix.appsec.dbInit.image" . }}
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: password
+            - name: DB_HOSTNAME
+              value: {{ include "threadfix.db.hostname" . | quote }}
+            - name: DB_PORT
+              value: {{ include "threadfix.db.servicePort" . | quote }}
+            - name: DB_DATABASE
+              value: {{ .Values.db.database | quote }}
+          command: ["/bin/bash"]
+          args:
+            - -c
+            - >-
+                for sql_script in /opt/dbScripts/*.sql; do  /opt/mssql-tools/bin/sqlcmd -S $DB_HOSTNAME,$DB_PORT -U $DB_USER -P $DB_PASSWORD -i $sql_script; done 
+          volumeMounts:
+            - name: db-init
+              mountPath: /opt/dbScripts/
+              readOnly: true
+          {{- if .Values.dbInit.extraVolumeMounts }}
+          {{- toYaml .Values.dbInit.extraVolumeMounts | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: db-init
+          configMap:
+            name: {{ default (printf "%s-db-init" (include "threadfix.appsec.fullname" . )) .Values.dbInit.existingConfigMap }}
+      restartPolicy: Never
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  backoffLimit: 2
+{{- end -}}
+{{- end -}}

@@ -1,0 +1,16 @@
+{{- if .Release.IsInstall -}}
+{{- if and .Values.dbInit.enabled (eq .Values.db.type "sqlserver" ) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "threadfix.appsec.fullname" . }}-db-init
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": "pre-install"
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+    "helm.sh/hook-weight": "-10"
+data:
+  db-init.sql: |
+    {{ tpl (.Files.Get "config/db-init.sql") . | nindent 4 }}
+{{- end }}
+{{- end }}

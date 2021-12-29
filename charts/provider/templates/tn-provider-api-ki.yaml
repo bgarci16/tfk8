@@ -1,0 +1,13 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongIngress
+metadata:
+  name: {{ include "threadfix.provider.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+proxy:
+  connect_timeout: 60000
+  path: /provider
+  protocol: http
+  read_timeout: 60000
+  retries: 5
+  write_timeout: 60000
+

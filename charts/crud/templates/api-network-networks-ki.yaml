@@ -1,0 +1,19 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongIngress
+metadata:
+  name: api-network-networks
+  namespace: {{ .Release.Namespace }}
+proxy: {}
+route:
+  methods:
+  - GET
+  - POST
+  - PATCH
+  - PUT
+  - DELETE
+  preserve_host: false
+  protocols:
+  - https
+  regex_priority: 0
+  strip_path: false
+

@@ -1,0 +1,12 @@
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "threadfix.zk.fullname" . }}-pdb
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "threadfix.zk.selectorLabels" . | nindent 6 }}
+  maxUnavailable: 1

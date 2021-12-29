@@ -1,0 +1,30 @@
+{{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1/Ingress" -}}
+apiVersion: networking.k8s.io/v1
+{{- else if .Capabilities.APIVersions.Has "networking.k8s.io/v1beta1/Ingress" -}}
+apiVersion: networking.k8s.io/v1beta1
+{{- else -}}
+apiVersion: extensions/v1beta1
+{{- end }}
+kind: Ingress
+metadata:
+  annotations:
+    konghq.com/override: api-defect-tracker
+    kubernetes.io/ingress.class: {{ include "threadfix.ingress.class" . }}
+  name: api-defect-tracker
+  namespace: {{ .Release.Namespace }}
+spec:
+  rules:
+  - http:
+      paths:
+      - backend:
+          {{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1/Ingress" }}
+          service:
+            name: {{ include "threadfix.defect.fullname" . }}-tracker
+            port:
+              number: {{ template "threadfix.defect.servicePort" . }}
+        pathType: Prefix
+          {{- else }}
+          serviceName: {{ include "threadfix.defect.fullname" . }}-tracker
+          servicePort: {{ template "threadfix.defect.servicePort" . }}
+          {{- end }}
+        path: /api/defect-tracker

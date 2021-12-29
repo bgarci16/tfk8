@@ -1,0 +1,162 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  name: {{ include "threadfix.appsecimporter.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  {{- include "threadfix.self.progressDeadlineSeconds" . | nindent 2 }}
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "threadfix.appsecimporter.selectorLabels" . | nindent 6 }}
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        {{- include "threadfix.appsecimporter.selectorLabels" . | nindent 8 }}
+    spec:
+      {{ include "threadfix.imagePullSecrets" . | indent 6 }}
+      serviceAccountName: {{ include "threadfix.self.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if eq "true" ( include "threadfix.wait.enabled" . ) }}
+      initContainers:
+        {{ include "threadfix.waitForAuth" . | nindent 8 }}
+        {{ include "threadfix.waitForKafka" . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: appsecimporter
+          {{- $probeValues := dict }}
+          {{- $_ := set $probeValues "livenessPath" "/actuator/health/liveness" }}
+          {{- $_ := set $probeValues "readinessPath" "/actuator/health/readiness" }}
+          {{- $_ := set $probeValues "port" "http" -}}
+          {{- include "threadfix.probes" (dict "args" $probeValues "context" . ) | indent 10 }}
+          securityContext:
+              {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ template "threadfix.image" . }}
+          imagePullPolicy: {{ template "threadfix.image.pullPolicy" .  }}
+          env:
+            - name: SPRING_CLOUD_STREAM_KAFKA_BINDER_MIN_PARTITION_COUNT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "threadfix.appsecimporter.fullname" . }}
+                  key: kafka.minPartionCount
+            - name: SPRING_CLOUD_STREAM_BINDINGS_FINDINGRECOMMENDATIONOUT_PRODUCER_PARTITION-COUNT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "threadfix.appsecdata.fullname" . }}
+                  key: kafka.minPartionCount
+            - name: SPRING_CLOUD_STREAM_BINDINGS_FINDINGDESCRIPTIONOUT_PRODUCER_PARTITION-COUNT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "threadfix.appsecdata.fullname" . }}
+                  key: kafka.minPartionCount
+            - name: SPRING_CLOUD_STREAM_KAFKA_BINDER_CONFIGURATION_MAX_POLL_INTERVAL_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "threadfix.appsecimporter.fullname" . }}
+                  key: kafka.maxProcessingTimeMS
+            - name: LOGGING_CONFIG
+              value: /opt/logback-all.xml
+            - name: SPRING_CLOUD_STREAM_KAFKA_STREAMS_BINDER_BROKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "threadfix.kafka.cm" . }}
+                  key: advertised-listeners
+            - name: SPRING_DATASOURCE_DRIVERCLASSNAME
+              value: "{{ template "threadfix.db.driver" . }}"
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: password
+            - name: SPRING_DATASOURCE_URL
+              value: "{{ template "threadfix.appsec.db.url" . }}"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: username
+            - name: SPRING_DATASOURCE_HIKARI_MINIMUM-IDLE
+              value: "{{ template "threadfix.db.pool.minPool" . }}"
+            - name: SPRING_DATASOURCE_HIKARI_MAXIMUM-POOL-SIZE
+              value: "{{ template "threadfix.db.pool.maxPool" . }}"
+            - name: SPRING_KAFKA_BOOTSTRAPSERVERS
+              value: "{{ template "threadfix.kafka.fullname" . }}:{{ include "threadfix.kafka.externalPort" . }}"
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ include "threadfix.springProfilesActive" . | quote }}
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ .Values.javaOpts }} -Dorg.owasp.esapi.resources="/opt/threadfix/esapi"
+            - name: MINIO_URL
+              value: "http://{{ coalesce .Values.minio.urlOverride .Values.global.minio.urlOverride (include "threadfix.minio.fullname" . )  }}:{{ default .Values.minio.servicePort 9000 }}"
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.minio.secret" . }}
+                  key: accesskey
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.minio.secret" . }}
+                  key: secretkey
+          ports:
+            - name: http
+              containerPort: 9100
+              protocol: TCP
+          workingDir: /app
+          volumeMounts:
+            - name: tf-config-secrets
+              mountPath: /opt/threadfix/esapi/ESAPI.properties
+              subPath: ESAPI.properties
+              readOnly: true
+            - name: tf-config-secrets
+              mountPath: /opt/threadfix/esapi/validation.properties
+              subPath: validation.properties
+              readOnly: true
+            - name: tf-config
+              mountPath: /opt/logback-all.xml
+              subPath: logback-all.xml
+            - name: tf-license
+              mountPath: /opt/threadfix.license
+              subPath: threadfix.license
+              readOnly: true
+            - name: working-dir
+              mountPath: /app
+            {{- if .Values.extraVolumeMounts }}
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}    
+      volumes:
+        - name: tf-config-secrets
+          secret:
+            secretName: {{ template "threadfix.config.secrets" . }}
+        - name: tf-config
+          configMap:
+            name: {{ .Release.Name }}-config
+        - name: tf-license
+          secret:
+            secretName: {{ template "threadfix.license.cm" . }}
+            items:
+              - key: threadfix.license
+                path: threadfix.license
+        - name: working-dir
+          emptyDir: {}
+        {{- if .Values.extraVolumes }}
+        {{- toYaml .Values.extraVolumes | nindent 8 }}
+        {{- end }}

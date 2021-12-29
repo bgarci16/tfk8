@@ -1,0 +1,18 @@
+
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    konghq.com/override: {{ include "threadfix.provider.fullname" . }}
+    konghq.com/plugins: jwt, tf-session
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  name: {{ include "threadfix.provider.fullname" . }}-api
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+  - port: {{ template "threadfix.provider.servicePort" . }}
+    protocol: TCP
+    targetPort: 8095
+  selector:
+    {{- include "threadfix.provider.selectorLabels" . | nindent 4 }}

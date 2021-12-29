@@ -1,0 +1,11 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongIngress
+metadata:
+  name: {{ include "threadfix.auth.fullname" . }}-saml
+proxy: {}
+route:
+  preserve_host: true
+  protocols:
+  - https
+  regex_priority: 0
+  strip_path: false

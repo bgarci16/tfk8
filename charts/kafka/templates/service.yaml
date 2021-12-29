@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "threadfix.kafka.fullname" . }}
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  clusterIP: None
+  ports:
+  - name: external
+    port: {{ template "threadfix.kafka.externalPort" . }}
+    protocol: TCP
+    targetPort: {{ template "threadfix.kafka.externalPort" . }}
+  - name: internal
+    port: {{ .Values.internalPort }}
+    protocol: TCP
+    targetPort: {{ .Values.internalPort }}
+  selector:
+    {{- include "threadfix.kafka.selectorLabels" . | nindent 4 }}

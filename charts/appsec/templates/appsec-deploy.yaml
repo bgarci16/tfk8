@@ -1,0 +1,221 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  name: {{ include "threadfix.appsec.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  {{- include "threadfix.self.progressDeadlineSeconds" . | nindent 2 }}
+  selector:
+    matchLabels:
+      {{- include "threadfix.appsec.selectorLabels" . | nindent 6 }}
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ .Values.global.threadfix.featureToggles | toString | sha256sum }}
+      creationTimestamp: null
+      labels:
+        {{- include "threadfix.appsec.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- include "threadfix.imagePullSecrets" . | indent 6 }}
+      serviceAccountName: {{ include "threadfix.self.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        {{- if eq "true" ( include "threadfix.wait.enabled" . ) -}}
+        {{- include "threadfix.waitForDB" . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.migration.enabled }}
+        - name: appsec-migration
+          securityContext:
+            {{- toYaml .Values.migration.securityContext | nindent 12 }}
+          image: {{ template "threadfix.migration.image" . }}
+          imagePullPolicy: {{ template "threadfix.migration.image.pullPolicy" .  }}
+          env:
+            - name: SPRING_DATASOURCE_DRIVERCLASSNAME
+              value: {{ template "threadfix.db.driver" . }}
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: password
+            - name: SPRING_DATASOURCE_URL
+              value: {{ template "threadfix.appsec.db.url" . }}
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: username
+            - name: SPRING_FLYWAY_CLEANDISABLED
+              value: "true"
+            - name: SPRING_FLYWAY_CONNECT-RETRIES
+              value: "300"
+            - name: APPSEC_FLYWAY_REPAIR-ENABLED
+              value: "true"
+            - name: _JAVA_OPTIONS
+              value: -Dorg.owasp.esapi.resources="/opt/threadfix/esapi"
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config-flags
+        {{- end }}
+          volumeMounts:
+            - name: tf-config-secrets
+              mountPath: /opt/threadfix/esapi/ESAPI.properties
+              subPath: ESAPI.properties
+              readOnly: true
+            - name: tf-config-secrets
+              mountPath: /opt/threadfix/esapi/validation.properties
+              subPath: validation.properties
+              readOnly: true
+          {{- if .Values.migration.extraVolumeMounts }}
+          {{- toYaml .Values.migration.extraVolumeMounts | nindent 12 }}
+          volumes:
+            - name: tf-config-secrets
+              secret:
+                secretName: {{ template "threadfix.config.secrets" . }}
+        {{- end }}
+      containers:
+        - name: {{ template "threadfix.appsec.fullname" . }}
+          {{- $probeValues := dict }}
+          {{- $_ := set $probeValues "livenessPath" "/threadfix/health" }}
+          {{- $_ := set $probeValues "readinessPath" "/threadfix/health" }}
+          {{- $_ := set $probeValues "port" "http" -}}
+          {{- include "threadfix.probes" (dict "args" $probeValues "context" . ) | indent 10 }}
+          securityContext:
+              {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ template "threadfix.image" . }}
+          imagePullPolicy: {{ template "threadfix.image.pullPolicy" . }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          volumeMounts:
+            - name: tf-license
+              mountPath: /usr/local/tomcat/webapps/threadfix/WEB-INF/classes/threadfix.license
+              subPath: threadfix.license
+              readOnly: true
+            - name: datadir
+              mountPath: /usr/local/tomcat/temp
+            - name: tf-config
+              mountPath: /opt/logback-appsec.xml
+              subPath: {{ .Values.logbackConfigurationFile }}
+            - name: tf-config-secrets
+              mountPath: /opt/threadfix/esapi/ESAPI.properties
+              subPath: ESAPI.properties
+              readOnly: true
+            - name: tf-config-secrets
+              mountPath: /opt/threadfix/esapi/validation.properties
+              subPath: validation.properties
+              readOnly: true
+            - name: jms
+              mountPath: /var/jms
+            {{- if .Values.extraVolumeMounts }}
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+            {{- end }}
+          env:
+            - name: JAVA_OPTS
+              value: {{ .Values.javaOpts | quote }}
+            - name: API_GATEWAY_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ template "threadfix.kong.cm" . }}
+                  key: kong.admin.name
+            - name: API_GATEWAY_ADMIN_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ template "threadfix.kong.cm" . }}
+                  key: kong.admin.port
+            - name: api.auth.hostname
+              value: "{{ template "threadfix.auth.fullname" . }}"
+            - name: api.auth.port
+              value: "{{ template "threadfix.auth.servicePort" . }}"
+            - name: hibernate.dialect
+              value: {{ template "threadfix.db.hibernateDialect" . }}
+            - name: hibernate.globally_quoted_identifiers
+              value: "{{ template "threadfix.db.globallyQuoted" . }}"
+            - name: jdbc.driverClassName
+              value: {{ template "threadfix.db.driver" . }}
+            - name: jdbc.password
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: password
+            - name: jdbc.url
+              value: {{ template "threadfix.appsec.db.url" . }}
+            - name: jdbc.username
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.db.secret" . }}
+                  key: username
+            - name: vibur.cacheSize
+              value: "{{ template "threadfix.db.pool.cacheSize" . }}"
+            - name: vibur.idleConnectionLimit
+              value: "{{ template "threadfix.db.pool.idleConnectionLimit" . }}"
+            - name: vibur.maxPool
+              value: "{{ template "threadfix.db.pool.maxPool" . }}"
+            - name: vibur.minPool
+              value: '{{ template "threadfix.db.pool.minPool" . }}'
+            - name: spring.kafka.bootstrap-servers
+              value: "{{ template "threadfix.kafka.fullname" . }}:{{ include "threadfix.kafka.externalPort" . }}"
+            - name: minio.url
+              value: "http://{{ coalesce .Values.minio.urlOverride .Values.global.minio.urlOverride (include "threadfix.minio.fullname" . )  }}:{{ default .Values.minio.servicePort 9000 }}"
+            - name: minio.access.key
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.minio.secret" . }}
+                  key: accesskey
+            - name: minio.secret.key
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threadfix.minio.secret" . }}
+                  key: secretkey
+            - name: max.poll.interval.ms
+              value: {{ default .Values.kafka.maxProcessingTimeMS .Values.global.threadfix.appsec.kafkaMaxProcessingTimeMS | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config-flags
+          command:
+            - bash
+            - -exc
+            - |
+              export JAVA_OPTS="$JAVA_OPTS -Dorg.owasp.esapi.resources=/opt/threadfix/esapi -Dapi.gateway.host=${API_GATEWAY_HOST} -Dapi.gateway.admin.port=${API_GATEWAY_ADMIN_PORT} -Dlogback.configurationFile=/opt/logback-appsec.xml -Dorg.jboss.logging.provider=slf4j" && \
+              exec catalina.sh run
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      volumes:
+      - name: tf-config
+        configMap:
+          name: {{ .Release.Name }}-config
+      - name: tf-config-secrets
+        secret:
+          secretName: {{ template "threadfix.config.secrets" . }}
+      - name: tf-license
+        secret:
+          secretName: {{ template "threadfix.license.cm" . }}
+      - name: datadir
+        persistentVolumeClaim:
+          claimName: {{ template "threadfix.appsec.fullname" . }}-data
+      - name: jms
+        emptyDir: {}
+      {{- if .Values.extraVolumes }}
+      {{- toYaml .Values.extraVolumes | nindent 6 }}
+      {{- end }}

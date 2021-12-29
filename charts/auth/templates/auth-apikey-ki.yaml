@@ -1,0 +1,12 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongIngress
+metadata:
+  name: auth-apikey
+  namespace: {{ .Release.Namespace }}
+proxy: {}
+route:
+  preserve_host: false
+  protocols:
+  - https
+  regex_priority: 0
+  strip_path: false

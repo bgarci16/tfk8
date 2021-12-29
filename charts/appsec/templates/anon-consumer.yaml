@@ -1,0 +1,8 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongConsumer
+metadata:
+  name: anon-consumer
+  annotations:
+    konghq.com/plugins: anon-termination
+    kubernetes.io/ingress.class: {{ include "threadfix.ingress.class" . }}
+username: anonymous

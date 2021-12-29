@@ -1,0 +1,146 @@
+suite: websocket images
+templates:
+  - ui-websocket-deploy.yaml
+tests:
+  - it: websocket local image tag
+    set:
+      image.tag: 3.0.3
+    asserts:
+      - isKind:
+          of: Deployment
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: docker.io/denimgroup/.*:3.0.3
+  - it: websocket global threadfix image tag
+    set:
+      global.threadfix.imageTag: 3.0.3
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: docker.io/denimgroup/.*:3.0.3
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: docker.io/busybox:1.28
+  - it: websocket repository
+    set:
+      image.repository: custom-image
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: custom-image
+  - it: websocket local registry
+    set:
+      image.registry: custom.repos.example.com/foo
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ^custom.repos.example.com/foo/[a-z]
+  - it: websocket threadfix registry
+    set:
+      global.threadfix.imageRegistry: custom.repos.example.com/foo
+      image.registry: foobar
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ^custom.repos.example.com/foo/[a-z]
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: docker.io/busybox:1.28
+  - it: websocket global registry
+    set:
+      global.imageRegistry: custom.repos.example.com/foo
+      global.threadfix.imageRegistry: foobar
+      image.registry: foobar
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ^custom.repos.example.com/foo/[a-z]
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: custom.repos.example.com/foo/busybox:1.28
+  - it: websocket all image things
+    set:
+      image.registry: custom.repos.example.com/foo
+      image.repository: custom-image
+      image.tag: 3.0.3
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: custom.repos.example.com/foo/custom-image:3.0.3
+  - it: websocket image override
+    set:
+      imageOverride: custom.repos.example.com/foo/custom-image:3.0.3
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: custom.repos.example.com/foo/custom-image:3.0.3
+  - it: websocket image override precidence
+    set:
+      imageOverride: custom.repos.example.com/foo/custom-image:3.0.3
+      image.tag: 3.0.6
+      image.registry: bad
+      image.repository: bad
+      global.threadfix.imageRegistry: bad
+      global.imageRegistry: example.com/foo
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: custom.repos.example.com/foo/custom-image:3.0.3
+  - it: websocket wait image
+    set:
+      wait.imageOverride: example.com/wait-image:latest
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: example.com/wait-image:latest
+  - it: websocket wait image repo
+    set:
+      wait.image.repository: wait-image
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: docker.io/wait-image:1.28
+  - it: websocket wait image repo
+    set:
+      wait.image.registry: example.com/foo
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: example.com/foo/busybox:1.28
+  - it: websocket wait image tag
+    set:
+      wait.image.tag: latest
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: docker.io/busybox:latest
+  - it: websocket wait image repo
+    set:
+      wait.image.tag: latest
+      wait.image.repository: wait-image
+      wait.image.registry: example.com/foo
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: example.com/foo/wait-image:latest
+  - it: websocket local image pull policy
+    set:
+      image.pullPolicy: Never
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].imagePullPolicy
+          value: Never
+      - equal:
+          path: spec.template.spec.initContainers[0].imagePullPolicy
+          value: IfNotPresent
+  - it: websocket global image pull policy
+    set:
+      global.imagePullPolicy: Never
+      image.pullPolicy: IfNotPresent
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].imagePullPolicy
+          value: Never
+      - equal:
+          path: spec.template.spec.initContainers[0].imagePullPolicy
+          value: Never

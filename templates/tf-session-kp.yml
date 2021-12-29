@@ -1,0 +1,10 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: tf-session
+  namespace: {{ .Release.Namespace }}
+configFrom:
+  secretKeyRef:
+    name: {{ include "threadfix.redis.secret" . }}
+    key: tf-session
+plugin: tf-session

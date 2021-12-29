@@ -1,0 +1,15 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongIngress
+metadata:
+  name: api-network-finding-services
+  namespace: {{ .Release.Namespace }}
+proxy: {}
+route:
+  methods:
+  - GET
+  preserve_host: false
+  protocols:
+  - https
+  regex_priority: 0
+  strip_path: false
+

@@ -1,0 +1,18 @@
+
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    configuration.konghq.com: {{ include "threadfix.queue.fullname" . }}-actuator-service
+    plugins.konghq.com: jwt, tf-session
+  labels:
+    {{- include "threadfix.self.labels" . | nindent 4 }}
+  name: {{ include "threadfix.queue.fullname" . }}-actuator-service
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+  - port: {{ template "threadfix.queue.servicePort" . }}
+    protocol: TCP
+    targetPort: 9110
+  selector:
+    {{- include "threadfix.queue.selectorLabels" . | nindent 4 }}
